@@ -2,26 +2,34 @@ import { NextPageContext } from 'next';
 import { initializeApollo } from 'config/client';
 import { parseCookies } from 'src/utils/cookies';
 import { DocumentNode } from 'graphql';
+import { appConstants } from 'server/utils/appConstants';
 
 const cookieProps = (
   context: NextPageContext,
   noAuth?: boolean
-): { theme: string; authenticated: boolean } => {
-  if (!context?.req) return { theme: 'dark', authenticated: false };
+): { theme: string; authenticated: boolean; lnMarketsAuth: boolean } => {
+  if (!context?.req)
+    return { theme: 'dark', authenticated: false, lnMarketsAuth: false };
 
   const cookies = parseCookies(context.req);
 
-  if (!cookies['Thub-Auth'] && !noAuth) {
+  let lnMarketsAuth = false;
+
+  if (cookies[appConstants.lnMarketsAuth]) {
+    lnMarketsAuth = true;
+  }
+
+  if (!cookies[appConstants.cookieName] && !noAuth) {
     context.res?.writeHead(302, { Location: '/' });
     context.res?.end();
 
-    return { theme: 'dark', authenticated: false };
+    return { theme: 'dark', authenticated: false, lnMarketsAuth };
   }
 
   if (cookies?.theme) {
-    return { theme: cookies.theme, authenticated: true };
+    return { theme: cookies.theme, authenticated: true, lnMarketsAuth };
   }
-  return { theme: 'dark', authenticated: true };
+  return { theme: 'dark', authenticated: true, lnMarketsAuth };
 };
 
 type QueryProps = {
@@ -43,7 +51,7 @@ export const getProps = async (
   queries?: (DocumentNode | QueryProps)[],
   noAuth?: boolean
 ) => {
-  const { theme, authenticated } = cookieProps(context, noAuth);
+  const { theme, authenticated, lnMarketsAuth } = cookieProps(context, noAuth);
 
   const apolloClient = initializeApollo(undefined, context);
 
@@ -61,13 +69,13 @@ export const getProps = async (
       }
     }
   } else {
-    return { props: { initialConfig: theme } };
+    return { props: { initialConfig: { theme, lnMarketsAuth } } };
   }
 
   return {
     props: {
       initialApolloState: apolloClient.cache.extract(),
-      initialConfig: theme,
+      initialConfig: { theme, lnMarketsAuth },
     },
   };
 };

@@ -28,6 +28,7 @@ export const generalTypes = gql`
 
 export const queryTypes = gql`
   type Query {
+    getLnMarketsUserInfo: LnMarketsUserInfo
     getInvoiceStatusChange(id: String!): String
     getBaseCanConnect: Boolean!
     getBaseNodes: [baseNodesType]!
@@ -91,6 +92,7 @@ export const queryTypes = gql`
 
 export const mutationTypes = gql`
   type Mutation {
+    lnMarketsLogin: AuthResponse!
     lnUrlAuth(url: String!): AuthResponse!
     lnUrlPay(callback: String!, amount: Int!, comment: String): PaySuccess!
     lnUrlWithdraw(

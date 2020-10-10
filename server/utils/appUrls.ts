@@ -11,4 +11,5 @@ export const appUrls = {
   ticker: 'https://blockchain.info/ticker',
   github: 'https://api.github.com/repos/apotdevin/thunderhub/releases/latest',
   update: 'https://github.com/apotdevin/thunderhub#updating',
+  lnMarkets: 'https://api.testnet.lnmarkets.com',
 };

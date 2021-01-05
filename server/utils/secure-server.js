@@ -147,25 +147,35 @@ async function validateCert(port, data, endpoint, apiKey) {
 }
 
 async function requestValidation(id, apiKey) {
-  let res = await fetch(
-    `${apiUrl}/certificates/${id}/challenges?access_key=${apiKey}`,
-    {
-      method: 'post',
-      body: qs.stringify({
-        validation_method: 'HTTP_CSR_HASH',
-      }),
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-      },
+  let tries = 0
+  while (true) {
+    let res = await fetch(
+      `${apiUrl}/certificates/${id}/challenges?access_key=${apiKey}`,
+      {
+        method: 'post',
+        body: qs.stringify({
+          validation_method: 'HTTP_CSR_HASH',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+    const json = await res.json();
+    if (json.success === false) {
+      if (tries > 10) {
+        console.log("=> [ssl] Validation failed 10 times. Exiting...")
+        throw new Error('=> [ssl] Failed to validate ssl certificate');
+      } else {
+        console.log("=> [ssl] Received error when requesting certificate")
+        console.log("=> [ssl] Retrying validation...")
+        tries++
+        await sleep(3000);
+      }
+    } else {
+      return json;
     }
-  );
-  const json = await res.json();
-  if (json.success === false) {
-    console.log('=> [ssl] Failed to request certificate validation');
-    console.log(json);
-    throw new Error('=> [ssl] Failing to provision ssl certificate');
   }
-  return json;
 }
 
 async function getCert(id, apiKey) {

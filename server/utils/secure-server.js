@@ -12,10 +12,10 @@ if (dev) {
   throw new Error('Running a secure server can only be done in production');
 }
 const app = next({ dev });
-const publicUrl = app.nextConfig.serverRuntimeConfig.publicUrl;
-const sslPort = app.nextConfig.serverRuntimeConfig.sslPort || 80;
-const sslSave = app.nextConfig.serverRuntimeConfig.sslSave;
-const logLevel = app.nextConfig.serverRuntimeConfig.logLevel;
+const publicUrl = process.env.PUBLIC_URL || app.nextConfig.serverRuntimeConfig.publicUrl;
+const sslPort = process.env.SSL_PORT || app.nextConfig.serverRuntimeConfig.sslPort;
+const sslSave = process.env.SSL_SAVE || app.nextConfig.serverRuntimeConfig.sslSave;
+const logLevel = process.env.LOG_LEVEL || app.nextConfig.serverRuntimeConfig.logLevel;
 const apiUrl = 'https://api.zerossl.com';
 const handle = app.getRequestHandler();
 

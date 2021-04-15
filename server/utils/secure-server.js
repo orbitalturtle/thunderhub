@@ -80,12 +80,40 @@ function sleep(ms) {
 function generateCsr(keys, endpoint) {
   var csr = forge.pki.createCertificationRequest();
   csr.publicKey = keys.publicKey;
-  csr.setSubject([
-    {
-      name: 'commonName',
-      value: endpoint,
-    },
-  ]);
+  if (endpoint.includes(',')) {
+    endpoints = endpoint.split(',')
+    altNamesList = []
+    var i;
+    for (i = 0; i < endpoints.length; i++) {
+      if (i === 0) {
+        csr.setSubject([
+          {
+            name: 'commonName',
+            value: endpoints[i],
+          },
+        ]);
+      } else {
+        altNamesList.push({
+          type: 2,
+          value: endpoints[i]
+        })
+      }
+    }
+    csr.setAttributes([{
+      name: 'extensionRequest',
+      extensions: [{
+        name: 'subjectAltName',
+        altNames: altNamesList
+      }]
+    }])
+  } else {
+    csr.setSubject([
+      {
+        name: 'commonName',
+        value: endpoint,
+      },
+    ]);
+  }
   csr.sign(keys.privateKey);
   if (!csr.verify()) {
     throw new Error('=> [ssl] Verification of CSR failed.');
@@ -116,6 +144,10 @@ async function requestCert(endpoint, csr, apiKey) {
 
 async function validateCert(port, data, endpoint, apiKey) {
   const app = express();
+  if (endpoint.includes(',')) {
+    endpoints = endpoint.split(',')
+    endpoint = endpoints[0]
+  }
   var validationObject = data.validation.other_methods[endpoint];
   var replacement = new RegExp(`http://${endpoint}`, 'g');
   var path = validationObject.file_validation_url_http.replace(replacement, '');

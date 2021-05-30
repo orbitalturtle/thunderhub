@@ -158,7 +158,17 @@ async function validateCert(port, data, endpoint, apiKey) {
   let server = await app.listen(port, () => {
     console.log(`=> [ssl] validation server started at http://0.0.0.0:${port}`);
   });
-  await requestValidation(data.id, apiKey);
+  try {
+    let json = await requestValidation(data.id, apiKey);
+  } catch(err) {
+    if (err.message.includes("Failed to validate ssl certificate")) {
+      await server.close(() => {
+        console.log('=> [ssl] validation server stopped.');
+      });
+      return false
+    }
+  }
+  console.log("JSON: ", json)
   console.log('=> [ssl] waiting for certificate to be issued');
 
   var checking = requestAttempts;
@@ -175,7 +185,7 @@ async function validateCert(port, data, endpoint, apiKey) {
   await server.close(() => {
     console.log('=> [ssl] validation server stopped.');
   });
-  return;
+  return true;
 }
 
 async function requestValidation(id, apiKey) {
@@ -255,7 +265,10 @@ async function getCertificate(endpoint, port, save_ssl) {
       certificate: certificate,
       caBundle: caBundle,
     };
-  }
+  } //else if ()
+  // OR... after this, check if selfsigned certificate exists???
+	// This might be a question to ask Graham once I turn in the first version. 
+
   var apiKey = process.env.ZEROSSL_API_KEY;
   if (!apiKey) {
     throw new Error('=> [ssl] ZEROSSL_API_KEY is not set');
@@ -265,9 +278,18 @@ async function getCertificate(endpoint, port, save_ssl) {
   console.log('=> [ssl] Generated CSR');
   var res = await requestCert(endpoint, csr, apiKey);
   console.log('=> [ssl] Requested certificate');
-  await validateCert(port, res, endpoint, apiKey);
-  var certData = await downloadCert(res.id, apiKey);
-  if (save_ssl === true) {
+  var selfSigned = false
+  let validated = await validateCert(port, res, endpoint, apiKey);
+  // If we can't get a certificate from the cert endpoint, let's create a self-signed certificate.
+  if (!validated) {
+    var certData = await generateSelfSignedCert(keys, endpoint)
+    selfSigned = true
+  }
+  if (!selfSigned) {
+    var certData = await downloadCert(res.id, apiKey);
+  }
+  // DEFINITELY REFACTOR THE BELOW PART.
+  if (save_ssl === true && selfSigned === false) {
     if (!existsSync(__dirname + '/zerossl')) {
       await mkdirSync(__dirname + '/zerossl');
     }
@@ -301,6 +323,30 @@ async function getCertificate(endpoint, port, save_ssl) {
         console.log('=> [ssl] wrote tls key');
       }
     );
+  } else if (save_ssl === true && selfSigned === true) {
+    if (!existsSync(__dirname + '/selfsigned')) {
+      await mkdirSync(__dirname + '/selfsigned');
+    }
+    await writeFile(
+      __dirname + '/selfsigned/tls.cert',
+      certData['certificate.crt'],
+      function (err) {
+        if (err) {
+          return console.log(err);
+        }
+        console.log('=> [ssl] wrote tls certificate');
+      }
+    );    
+    await writeFile(
+      __dirname + '/selfsigned/tls.key',
+      forge.pki.privateKeyToPem(keys.privateKey),
+      function (err) {
+        if (err) {
+          return console.log(err);
+        }
+        console.log('=> [ssl] wrote tls key');
+      }
+    );
   }
   return {
     privateKey: forge.pki.privateKeyToPem(keys.privateKey),
@@ -308,3 +354,43 @@ async function getCertificate(endpoint, port, save_ssl) {
     caBundle: certData['ca_bundle.crt'],
   };
 }
+
+//function writeCertificate(certData, selfSigned) {
+//
+//}
+
+async function generateSelfSignedCert(keys, endpoint) {
+  let cert = forge.pki.createCertificate();
+
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '0';
+  cert.validity.notBefore = new Date();
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+  
+  let attrs = [{
+    name: 'commonName',
+    value: endpoint
+  }, {
+    name: 'organizationName',
+    value: 'Test'
+  }];
+
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  
+  cert.sign(keys.privateKey);
+  
+  // Convert the certificate to PEM format.
+  var pem = forge.pki.certificateToPem(cert);
+
+  return {'certificate.crt': pem}
+}
+
+module.exports = { 
+	runServer: runServer,
+	getCertificate: getCertificate,
+	requestCert: requestCert,
+	validateCert: validateCert, 
+	requestValidation: requestValidation,
+};
